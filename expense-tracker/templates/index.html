@@ -48,3 +48,87 @@
             <button type="button" id="cancel-edit" style="display:none;">Cancel Edit</button>
         </form>
     </div>
+
+    <!-- Table to Display Expenses -->
+    <h2>Your Expenses</h2>
+    <table id="expense-table">
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Base</th>
+                <th>Tax</th>
+                <th>Total</th>
+                <th>Reimbursable?</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="expense-list">
+            <!-- Expenses will be loaded here by JavaScript -->
+        </tbody>
+    </table>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('expense-form');
+            const expenseList = document.getElementById('expense-list');
+            const formTitle = document.getElementById('form-title');
+            const expenseIdInput = document.getElementById('expense-id');
+            const cancelEditBtn = document.getElementById('cancel-edit');
+
+            // Fetch and display all expenses on page load
+            async function fetchExpenses() {
+                const response = await fetch('/api/expenses');
+                const expenses = await response.json();
+                
+                expenseList.innerHTML = ''; // Clear existing list
+                expenses.forEach(expense => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${expense.description}</td>
+                        <td>${expense.category}</td>
+                        <td>$${expense.base_amount.toFixed(2)}</td>
+                        <td>$${expense.tax_amount.toFixed(2)}</td>
+                        <td><b>$${expense.total_amount.toFixed(2)}</b></td>
+                        <td>${expense.is_reimbursable ? 'Yes' : 'No'}</td>
+                        <td>
+                            <button onclick="editExpense(${expense.id})">Edit</button>
+                            <button onclick="deleteExpense(${expense.id})">Delete</button>
+                        </td>
+                    `;
+                    expenseList.appendChild(row);
+                });
+            }
+
+            // Handle form submission for both creating and updating
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                
+                const id = expenseIdInput.value;
+                const url = id ? `/api/expenses/${id}` : '/api/expenses';
+                const method = id ? 'PUT' : 'POST';
+
+                const formData = {
+                    description: document.getElementById('description').value,
+                    base_amount: parseFloat(document.getElementById('base_amount').value),
+                    tax_amount: parseFloat(document.getElementById('tax_amount').value),
+                    category: document.getElementById('category').value,
+                    is_reimbursable: document.getElementById('is_reimbursable').checked
+                };
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    form.reset();
+                    expenseIdInput.value = '';
+                    formTitle.innerText = 'Add New Expense';
+                    cancelEditBtn.style.display = 'none';
+                    await fetchExpenses();
+                } else {
+                    alert('Failed to save expense.');
+                }
+            });
