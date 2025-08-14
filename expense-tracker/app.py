@@ -32,7 +32,7 @@ def create_app(config_class=Config):
     @login_required
     def index():
         user = db.session.get(User, session['user_id'])
-        # Pass the categories to the template for the dropdown
+        # Pass the categories to the template for the dropdowns
         categories = [category.value for category in ExpenseCategory]
         return render_template('index.html', user=user, categories=categories)
 
@@ -87,9 +87,7 @@ def create_app(config_class=Config):
             return jsonify({'error': 'Missing required fields'}), 400
 
         try:
-            # Convert string from form to Enum member
             category_enum = ExpenseCategory[data.get('category', 'OTHER').upper()]
-
             new_expense = Expense(
                 description=data['description'],
                 category=category_enum,
@@ -104,13 +102,33 @@ def create_app(config_class=Config):
         except (ValueError, KeyError) as e:
             return jsonify({'error': f'Invalid data: {e}'}), 400
 
-
     @app.route('/api/expenses', methods=['GET'])
     @login_required
     def get_expenses():
-        user_expenses = Expense.query.filter_by(user_id=session['user_id']).all()
-        return jsonify([expense.to_dict() for expense in user_expenses]), 200
+        page = request.args.get('page', 1, type=int)
+        category_filter = request.args.get('category', 'ALL', type=str)
 
+        query = Expense.query.filter_by(user_id=session['user_id'])
+
+        if category_filter != 'ALL':
+            try:
+                category_enum = ExpenseCategory[category_filter.upper()]
+                query = query.filter_by(category=category_enum)
+            except KeyError:
+                return jsonify({'error': 'Invalid category specified'}), 400
+        
+        query = query.order_by(Expense.created_at.desc())
+
+        pagination = query.paginate(page=page, per_page=5, error_out=False)
+        expenses = pagination.items
+
+        return jsonify({
+            'expenses': [expense.to_dict() for expense in expenses],
+            'total_pages': pagination.pages,
+            'current_page': pagination.page,
+            'has_next': pagination.has_next,
+            'has_prev': pagination.has_prev
+        }), 200
 
     @app.route('/api/expenses/<int:expense_id>', methods=['PUT'])
     @login_required
@@ -135,7 +153,6 @@ def create_app(config_class=Config):
             return jsonify(expense.to_dict()), 200
         except (ValueError, KeyError) as e:
             return jsonify({'error': f'Invalid data: {e}'}), 400
-
 
     @app.route('/api/expenses/<int:expense_id>', methods=['DELETE'])
     @login_required
