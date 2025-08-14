@@ -1,13 +1,15 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from functools import wraps
 from config import Config
-from models import db, User, Expense
+from models import db, User, Expense, ExpenseCategory
 
+# --- App Factory ---
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Ensure the instance folder exists
     try:
         os.makedirs(app.instance_path)
     except OSError:
@@ -15,6 +17,7 @@ def create_app(config_class=Config):
 
     db.init_app(app)
 
+    # --- Login Required Decorator ---
     def login_required(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -24,11 +27,14 @@ def create_app(config_class=Config):
             return f(*args, **kwargs)
         return decorated_function
 
+    # --- Page Routes ---
     @app.route('/')
     @login_required
     def index():
         user = db.session.get(User, session['user_id'])
-        return render_template('index.html', user=user)
+        # Pass the categories to the template for the dropdown
+        categories = [category.value for category in ExpenseCategory]
+        return render_template('index.html', user=user, categories=categories)
 
     @app.route('/register', methods=['GET', 'POST'])
     def register():
@@ -72,6 +78,80 @@ def create_app(config_class=Config):
         flash('You have been logged out.', 'info')
         return redirect(url_for('login'))
 
+    # --- API Routes ---
+    @app.route('/api/expenses', methods=['POST'])
+    @login_required
+    def create_expense():
+        data = request.get_json()
+        if not data or not data.get('description') or data.get('base_amount') is None:
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        try:
+            # Convert string from form to Enum member
+            category_enum = ExpenseCategory[data.get('category', 'OTHER').upper()]
+
+            new_expense = Expense(
+                description=data['description'],
+                category=category_enum,
+                base_amount=float(data['base_amount']),
+                tax_amount=float(data.get('tax_amount', 0.0)),
+                is_reimbursable=bool(data.get('is_reimbursable', False)),
+                user_id=session['user_id']
+            )
+            db.session.add(new_expense)
+            db.session.commit()
+            return jsonify(new_expense.to_dict()), 201
+        except (ValueError, KeyError) as e:
+            return jsonify({'error': f'Invalid data: {e}'}), 400
+
+
+    @app.route('/api/expenses', methods=['GET'])
+    @login_required
+    def get_expenses():
+        user_expenses = Expense.query.filter_by(user_id=session['user_id']).all()
+        return jsonify([expense.to_dict() for expense in user_expenses]), 200
+
+
+    @app.route('/api/expenses/<int:expense_id>', methods=['PUT'])
+    @login_required
+    def update_expense(expense_id):
+        expense = db.session.get(Expense, expense_id)
+        if not expense:
+            return jsonify({'error': 'Expense not found'}), 404
+        
+        if expense.user_id != session['user_id']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        data = request.get_json()
+        try:
+            expense.description = data.get('description', expense.description)
+            if 'category' in data:
+                expense.category = ExpenseCategory[data['category'].upper()]
+            expense.base_amount = float(data.get('base_amount', expense.base_amount))
+            expense.tax_amount = float(data.get('tax_amount', expense.tax_amount))
+            expense.is_reimbursable = bool(data.get('is_reimbursable', expense.is_reimbursable))
+            
+            db.session.commit()
+            return jsonify(expense.to_dict()), 200
+        except (ValueError, KeyError) as e:
+            return jsonify({'error': f'Invalid data: {e}'}), 400
+
+
+    @app.route('/api/expenses/<int:expense_id>', methods=['DELETE'])
+    @login_required
+    def delete_expense(expense_id):
+        expense = db.session.get(Expense, expense_id)
+        if not expense:
+            return jsonify({'error': 'Expense not found'}), 404
+
+        if expense.user_id != session['user_id']:
+            return jsonify({'error': 'Unauthorized'}), 403
+            
+        db.session.delete(expense)
+        db.session.commit()
+        return jsonify({'message': 'Expense deleted successfully'}), 200
+
+    # --- Database Initialization ---
     with app.app_context():
         db.create_all()
 

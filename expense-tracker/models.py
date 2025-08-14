@@ -38,3 +38,15 @@ class Expense(db.Model):
     @hybrid_property
     def total_amount(self):
         return self.base_amount + self.tax_amount
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'description': self.description,
+            'category': self.category.value,
+            'is_reimbursable': self.is_reimbursable,
+            'base_amount': self.base_amount,
+            'tax_amount': self.tax_amount,
+            'total_amount': self.total_amount,
+            'created_at': self.created_at.isoformat()
+        }
