@@ -2,11 +2,49 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker - Dashboard</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .form-container { padding: 20px; border: 1px solid #ccc; margin-bottom: 20px; }
+        .logout { float: right; }
+    </style>
 </head>
 <body>
+
+    <a href="{{ url_for('logout') }}" class="logout">Logout</a>
     <h1>Welcome, {{ user.username }}!</h1>
-    <p>This will be your expense tracking dashboard.</p>
-    <a href="{{ url_for('logout') }}">Logout</a>
-</body>
-</html>
+    <p>Track and manage your expenses below.</p>
+
+    <!-- Form for Adding/Editing Expenses -->
+    <div class="form-container">
+        <h2 id="form-title">Add New Expense</h2>
+        <form id="expense-form">
+            <input type="hidden" id="expense-id">
+            
+            <label for="description">Description:</label><br>
+            <input type="text" id="description" name="description" required size="50"><br><br>
+
+            <label for="base_amount">Base Amount ($):</label><br>
+            <input type="number" id="base_amount" name="base_amount" step="0.01" required><br><br>
+
+            <label for="tax_amount">Tax Amount ($):</label><br>
+            <input type="number" id="tax_amount" name="tax_amount" step="0.01" value="0.00" required><br><br>
+
+            <label for="category">Category:</label><br>
+            <select id="category" name="category" required>
+                {% for cat in categories %}
+                <option value="{{ cat.upper() }}">{{ cat }}</option>
+                {% endfor %}
+            </select><br><br>
+
+            <input type="checkbox" id="is_reimbursable" name="is_reimbursable">
+            <label for="is_reimbursable">Is this reimbursable?</label><br><br>
+
+            <button type="submit">Save Expense</button>
+            <button type="button" id="cancel-edit" style="display:none;">Cancel Edit</button>
+        </form>
+    </div>
