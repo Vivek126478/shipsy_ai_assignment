@@ -32,7 +32,6 @@ def create_app(config_class=Config):
     @login_required
     def index():
         user = db.session.get(User, session['user_id'])
-        # Pass the categories to the template for the dropdowns
         categories = [category.value for category in ExpenseCategory]
         return render_template('index.html', user=user, categories=categories)
 
@@ -174,6 +173,8 @@ def create_app(config_class=Config):
 
     return app
 
+app = create_app()
+
+# Only run in local development
 if __name__ == '__main__':
-    app = create_app()
     app.run(debug=True)
